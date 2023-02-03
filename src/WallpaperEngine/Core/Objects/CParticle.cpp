@@ -4,12 +4,14 @@
 using namespace WallpaperEngine::Core::Objects;
 
 CParticle* CParticle::fromFile (
+    CScene* scene,
     const std::string& filename,
-    CContainer* container,
+    const CContainer* container,
+    CUserSettingBoolean* visible,
     uint32_t id,
     std::string name,
-    const glm::vec3& origin,
-    const glm::vec3& scale)
+    CUserSettingVector3* origin,
+    CUserSettingVector3* scale)
 {
     json data = json::parse (WallpaperEngine::FileSystem::loadFullFile (filename, container));
     auto controlpoint_it = data.find ("controlpoint");
@@ -19,8 +21,10 @@ CParticle* CParticle::fromFile (
     auto initializer_it = jsonFindRequired (data, "initializer", "Particles must have initializers");
 
     CParticle* particle = new CParticle (
+        scene,
         *starttime_it,
         *maxcount_it,
+        visible,
         id,
         name,
         origin,
@@ -29,48 +33,28 @@ CParticle* CParticle::fromFile (
 
     if (controlpoint_it != data.end ())
     {
-        auto cur = (*controlpoint_it).begin ();
-        auto end = (*controlpoint_it).end ();
-
-        for (; cur != end; cur ++)
-        {
-            particle->insertControlPoint (
-                    Particles::CControlPoint::fromJSON (*cur)
-            );
-        }
+        for (const auto& cur : (*controlpoint_it))
+            particle->insertControlPoint (Particles::CControlPoint::fromJSON (cur));
     }
 
-    auto cur = (*emitter_it).begin ();
-    auto end = (*emitter_it).end ();
-
-    for (; cur != end; cur ++)
-    {
-        particle->insertEmitter (
-                Particles::CEmitter::fromJSON (*cur)
-        );
-    }
-
-    cur = (*initializer_it).begin ();
-    end = (*initializer_it).end ();
-
-    for (; cur != end; cur ++)
-    {
-        particle->insertInitializer (
-                Particles::CInitializer::fromJSON (*cur)
-        );
-    }
+    for (const auto& cur : (*emitter_it))
+        particle->insertEmitter (Particles::CEmitter::fromJSON (cur));
+    for (const auto&cur : (*initializer_it))
+        particle->insertInitializer (Particles::CInitializer::fromJSON (cur));
 
     return particle;
 }
 
 CParticle::CParticle (
+        CScene* scene,
         uint32_t starttime,
         uint32_t maxcount,
+        CUserSettingBoolean* visible,
         uint32_t id,
         std::string name,
-        const glm::vec3& origin,
-        const glm::vec3& scale):
-        CObject (true, id, std::move(name), Type, origin, scale, glm::vec3 ()),
+        CUserSettingVector3* origin,
+        CUserSettingVector3* scale):
+        CObject (scene, visible, id, std::move(name), Type, origin, scale, glm::vec3 ()),
         m_starttime (starttime),
         m_maxcount (maxcount)
 {

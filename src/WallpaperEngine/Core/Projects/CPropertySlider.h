@@ -7,7 +7,6 @@
 namespace WallpaperEngine::Core::Projects
 {
     using json = nlohmann::json;
-    using namespace WallpaperEngine::Core::Types;
 
     class CPropertySlider : public CProperty
     {
@@ -18,6 +17,8 @@ namespace WallpaperEngine::Core::Projects
         const double& getMinValue () const;
         const double& getMaxValue () const;
         const double& getStep () const;
+        std::string dump () const override;
+        void update (const std::string& value) override;
 
         static const std::string Type;
 

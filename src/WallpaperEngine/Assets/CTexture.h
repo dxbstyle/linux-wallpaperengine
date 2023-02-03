@@ -18,7 +18,7 @@ namespace WallpaperEngine::Assets
         struct TextureHeader;
 
     public:
-        CTexture (void* fileData);
+        CTexture (const void* fileData);
         ~CTexture ();
 
         const GLuint getTextureID (uint32_t imageIndex = 0) const override;
@@ -27,6 +27,7 @@ namespace WallpaperEngine::Assets
         const uint32_t getRealWidth () const override;
         const uint32_t getRealHeight () const override;
         const TextureFormat getFormat () const override;
+        const TextureFlags getFlags () const override;
         const glm::vec4* getResolution () const override;
         const std::vector<TextureFrame*>& getFrames () const override;
         const bool isAnimated () const override;
@@ -75,17 +76,6 @@ namespace WallpaperEngine::Assets
             void decompressData ();
         };
 
-        /**
-         * Configures how the texture will be handled by the background
-         */
-        enum TextureFlags : uint32_t
-        {
-            NoFlags = 0,
-            NoInterpolation = 1,
-            ClampUVs = 2,
-            IsGif = 4,
-        };
-
         class TextureHeader
         {
         public:
@@ -126,9 +116,9 @@ namespace WallpaperEngine::Assets
             std::vector <TextureFrame*> frames;
         };
     private:
-        static TextureHeader* parseHeader (char* fileData);
-        static TextureFrame* parseAnimation (TextureHeader* header, char** originalFileData);
-        static TextureMipmap* parseMipmap (TextureHeader* header, char** fileData);
+        static TextureHeader* parseHeader (const char* fileData);
+        static TextureFrame* parseAnimation (TextureHeader* header, const char** originalFileData);
+        static TextureMipmap* parseMipmap (TextureHeader* header, const char** fileData);
 
         TextureHeader* m_header;
         GLuint* m_textureID;

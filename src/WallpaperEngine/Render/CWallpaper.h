@@ -7,15 +7,15 @@
 #include "WallpaperEngine/Core/CScene.h"
 #include "WallpaperEngine/Core/CVideo.h"
 
-#include "WallpaperEngine/Assets/CContainer.h"
 #include "CFBO.h"
-#include "CContext.h"
+#include "CRenderContext.h"
+#include "WallpaperEngine/Assets/CContainer.h"
 
 using namespace WallpaperEngine::Assets;
 
 namespace WallpaperEngine::Render
 {
-    class CContext;
+    class CRenderContext;
 
     class CWallpaper
     {
@@ -25,18 +25,23 @@ namespace WallpaperEngine::Render
 
         template<class T> bool is () { return this->m_type == T::Type; }
 
-        CWallpaper (Core::CWallpaper* wallpaperData, std::string type, CContainer* container, CContext* context);
+        CWallpaper (Core::CWallpaper* wallpaperData, std::string type, CRenderContext* context);
         ~CWallpaper ();
 
         /**
          * Performs a render pass of the wallpaper
          */
-        void render (glm::ivec4 viewport, bool renderFrame = true, bool newFrame = true);
+        void render (glm::ivec4 viewport, bool vflip, bool renderFrame = true, bool newFrame = true);
 
         /**
          * @return The container to resolve files for this wallpaper
          */
-        CContainer* getContainer () const;
+        const CContainer* getContainer () const;
+
+        /**
+         * @return The current context rendering this wallpaper
+         */
+        CRenderContext* getContext ();
 
         /**
          * @return The scene's framebuffer
@@ -52,7 +57,7 @@ namespace WallpaperEngine::Render
          * @param name The name of the FBO
          * @return
          */
-        CFBO* createFBO (const std::string& name, ITexture::TextureFormat format, float scale, uint32_t realWidth, uint32_t realHeight, uint32_t textureWidth, uint32_t textureHeight);
+        CFBO* createFBO (const std::string& name, ITexture::TextureFormat format, ITexture::TextureFlags flags, float scale, uint32_t realWidth, uint32_t realHeight, uint32_t textureWidth, uint32_t textureHeight);
 
         /**
          * @return The full FBO list to work with
@@ -90,7 +95,7 @@ namespace WallpaperEngine::Render
          *
          * @return
          */
-        static CWallpaper* fromWallpaper (Core::CWallpaper* wallpaper, CContainer* containers, CContext* context);
+        static CWallpaper* fromWallpaper (Core::CWallpaper* wallpaper, CRenderContext* context);
 
     protected:
         /**
@@ -103,12 +108,6 @@ namespace WallpaperEngine::Render
          */
         void setupFramebuffers ();
 
-        /**
-         * @return The current context rendering this wallpaper
-         */
-        CContext* getContext ();
-
-        CContainer* m_container;
         Core::CWallpaper* m_wallpaperData;
 
         Core::CWallpaper* getWallpaperData ();
@@ -129,6 +128,7 @@ namespace WallpaperEngine::Render
         GLint g_Texture0;
         GLint a_Position;
         GLint a_TexCoord;
+        GLuint m_vaoBuffer;
         /**
          * The framebuffer to draw the background to
          */
@@ -149,6 +149,6 @@ namespace WallpaperEngine::Render
         /**
          * Context that is using this wallpaper
          */
-        CContext* m_context;
+        CRenderContext* m_context;
     };
 }

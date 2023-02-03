@@ -23,7 +23,8 @@ namespace WallpaperEngine::Render::Objects
 
         const std::vector<Effects::CMaterial*>& getMaterials () const;
 
-        CFBO* findFBO (const std::string& name) const;
+        const CFBO* findFBO (const std::string& name) const;
+        bool isVisible () const;
 
     private:
         void generatePasses ();

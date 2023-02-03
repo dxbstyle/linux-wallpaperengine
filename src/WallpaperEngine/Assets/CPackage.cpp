@@ -1,3 +1,4 @@
+#include "common.h"
 #include "CPackage.h"
 #include "CAssetLoadException.h"
 #include "CPackageLoadException.h"
@@ -20,8 +21,8 @@ public:
     uint32_t length;
 };
 
-CPackage::CPackage (const std::string& path) :
-    m_path (path),
+CPackage::CPackage (std::filesystem::path  path) :
+    m_path (std::move(path)),
     m_contents ()
 {
     this->init ();
@@ -33,7 +34,7 @@ CPackage::~CPackage()
 }
 
 
-void* CPackage::readFile (std::string filename, uint32_t* length)
+const void* CPackage::readFile (std::string filename, uint32_t* length) const
 {
     auto it = this->m_contents.find (filename);
 
@@ -67,7 +68,7 @@ char* CPackage::readSizedString (FILE* fp)
     unsigned int length = 0;
 
     if (fread (&length, sizeof (unsigned int), 1, fp) != 1)
-        throw std::runtime_error ("Cannot read enough bytes from file");
+        sLog.exception ("Cannot read sized string length on file ", this->m_path);
 
     // account for 0 termination of the string
     length ++;
@@ -80,7 +81,7 @@ char* CPackage::readSizedString (FILE* fp)
 
     // read data from file
     if (fread (pointer, sizeof (char), length, fp) != length)
-        throw std::runtime_error ("Cannot read package version from file");
+        sLog.exception ("Not enough bytes to read string of length ", length, " on file ", this->m_path);
 
     return pointer;
 }
@@ -90,7 +91,7 @@ uint32_t CPackage::readInteger (FILE* fp)
     uint32_t output;
 
     if (fread (&output, sizeof (uint32_t), 1, fp) != 1)
-        throw std::runtime_error ("Cannot read integer value from file");
+        sLog.exception ("Not enough bytes to read an integer from file ", this->m_path);
 
     return output;
 }
@@ -115,6 +116,7 @@ void CPackage::validateHeader (FILE* fp)
         strcmp ("PKGV0014", pointer) != 0 &&
         strcmp ("PKGV0015", pointer) != 0 &&
         strcmp ("PKGV0016", pointer) != 0 &&
+        strcmp ("PKGV0017", pointer) != 0 &&
         strcmp ("PKGV0018", pointer) != 0)
     {
         std::stringstream msg;
@@ -148,32 +150,25 @@ void CPackage::loadFiles (FILE* fp)
     // get current baseOffset, this is where the files start
     long baseOffset = ftell (fp);
 
-    // read file contents now
-    auto cur = list.begin ();
-    auto end = list.end ();
-
-    for (; cur != end; cur ++)
+    for (const auto& cur : list)
     {
-        long offset = (*cur).offset + baseOffset;
+        long offset = cur.offset + baseOffset;
 
         // with all the data we can jump to the offset and read the content
         if (fseek (fp, offset, SEEK_SET) != 0)
-            throw std::runtime_error ("Cannot find file in package");
+            sLog.exception ("Cannot find file ", cur.filename, " from package ", this->m_path);
 
         // allocate memory for the file's contents and read it from the file
-        char* fileContents = new char [(*cur).length];
+        char* fileContents = new char [cur.length];
 
-        if (fread (fileContents, (*cur).length, 1, fp) != 1)
+        if (fread (fileContents, cur.length, 1, fp) != 1)
         {
             delete[] fileContents;
 
-            throw std::runtime_error ("Cannot read file contents from package");
+            sLog.exception ("Cannot read file ", cur.filename, " contents from package ", this->m_path);
         }
 
         // add the file to the map
-        this->m_contents.insert (std::make_pair <std::string, CFileEntry> (
-            std::move((*cur).filename),
-            CFileEntry (fileContents, (*cur).length))
-        );
+        this->m_contents.insert_or_assign (cur.filename, CFileEntry (fileContents, cur.length));
     }
 }

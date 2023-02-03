@@ -6,7 +6,8 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 set(OpenGL_GL_PREFERENCE "LEGACY")
 
 # if you're developing you might find this debug option useful for shader output, although RenderDoc is encouraged
-add_compile_definitions(DEBUG=0)
+add_compile_definitions(DEBUG=1)
+add_compile_definitions(ERRORONLY=0)
 
 find_package(X11 REQUIRED)
 find_package(Xrandr REQUIRED)
@@ -37,12 +38,20 @@ add_executable(
         linux-wallpaperengine
         main.cpp
 
+        src/Steam/FileSystem/FileSystem.h
+        src/Steam/FileSystem/FileSystem.cpp
+
+        src/WallpaperEngine/Logging/CLog.cpp
+        src/WallpaperEngine/Logging/CLog.h
+
         src/WallpaperEngine/Assets/CPackageLoadException.cpp
         src/WallpaperEngine/Assets/CPackageLoadException.h
         src/WallpaperEngine/Assets/CAssetLoadException.cpp
         src/WallpaperEngine/Assets/CAssetLoadException.h
         src/WallpaperEngine/Assets/CContainer.h
         src/WallpaperEngine/Assets/CContainer.cpp
+        src/WallpaperEngine/Assets/CVirtualContainer.h
+        src/WallpaperEngine/Assets/CVirtualContainer.cpp
         src/WallpaperEngine/Assets/CCombinedContainer.h
         src/WallpaperEngine/Assets/CCombinedContainer.cpp
         src/WallpaperEngine/Assets/CDirectory.h
@@ -78,8 +87,14 @@ add_executable(
         src/WallpaperEngine/Render/Shaders/Compiler.h
         src/WallpaperEngine/Render/Shaders/Compiler.cpp
 
-        src/WallpaperEngine/Render/CContext.h
-        src/WallpaperEngine/Render/CContext.cpp
+        src/WallpaperEngine/Render/Drivers/COpenGLDriver.h
+        src/WallpaperEngine/Render/Drivers/COpenGLDriver.cpp
+        src/WallpaperEngine/Render/Drivers/CVideoDriver.h
+        src/WallpaperEngine/Render/Drivers/CVideoDriver.cpp
+        src/WallpaperEngine/Render/CRenderContext.h
+        src/WallpaperEngine/Render/CRenderContext.cpp
+        src/WallpaperEngine/Render/CTextureCache.h
+        src/WallpaperEngine/Render/CTextureCache.cpp
 
         src/WallpaperEngine/Render/CWallpaper.h
         src/WallpaperEngine/Render/CWallpaper.cpp
@@ -109,8 +124,14 @@ add_executable(
         src/WallpaperEngine/FileSystem/FileSystem.cpp
         src/WallpaperEngine/FileSystem/FileSystem.h
 
-        src/WallpaperEngine/Core/Types/FloatColor.h
-        src/WallpaperEngine/Core/Types/IntegerColor.h
+        src/WallpaperEngine/Core/UserSettings/CUserSettingValue.cpp
+        src/WallpaperEngine/Core/UserSettings/CUserSettingValue.h
+        src/WallpaperEngine/Core/UserSettings/CUserSettingBoolean.cpp
+        src/WallpaperEngine/Core/UserSettings/CUserSettingBoolean.h
+        src/WallpaperEngine/Core/UserSettings/CUserSettingVector3.cpp
+        src/WallpaperEngine/Core/UserSettings/CUserSettingVector3.h
+        src/WallpaperEngine/Core/UserSettings/CUserSettingFloat.cpp
+        src/WallpaperEngine/Core/UserSettings/CUserSettingFloat.h
 
         src/WallpaperEngine/Core/CProject.cpp
         src/WallpaperEngine/Core/CProject.h
@@ -133,6 +154,8 @@ add_executable(
         src/WallpaperEngine/Core/Projects/CPropertySlider.cpp
         src/WallpaperEngine/Core/Projects/CPropertyCombo.h
         src/WallpaperEngine/Core/Projects/CPropertyCombo.cpp
+        src/WallpaperEngine/Core/Projects/CPropertyText.h
+        src/WallpaperEngine/Core/Projects/CPropertyText.cpp
 
         src/WallpaperEngine/Core/Scenes/CCamera.cpp
         src/WallpaperEngine/Core/Scenes/CCamera.h

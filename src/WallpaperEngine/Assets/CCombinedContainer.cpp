@@ -8,18 +8,15 @@ void CCombinedContainer::add (CContainer* container)
     this->m_containers.emplace_back (container);
 }
 
-void* CCombinedContainer::readFile (std::string filename, uint32_t* length)
+const void* CCombinedContainer::readFile (std::string filename, uint32_t* length) const
 {
-    auto cur = this->m_containers.begin ();
-    auto end = this->m_containers.end ();
-
-    for (; cur != end; cur ++)
+    for (auto cur : this->m_containers)
     {
         try
         {
             // try to read the file on the current container, if the file doesn't exists
             // an exception will be thrown
-            return (*cur)->readFile (filename, length);
+            return cur->readFile (filename, length);
         }
         catch (CAssetLoadException& ex)
         {

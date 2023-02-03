@@ -2,10 +2,12 @@
 
 #include "WallpaperEngine/Core/Core.h"
 #include "WallpaperEngine/Core/CObject.h"
+#include "WallpaperEngine/Core/UserSettings/CUserSettingBoolean.h"
 
 namespace WallpaperEngine::Core::Objects
 {
     using json = nlohmann::json;
+    using namespace WallpaperEngine::Core::UserSettings;
 
     class CSound : public CObject
     {
@@ -13,12 +15,13 @@ namespace WallpaperEngine::Core::Objects
 
     public:
         static CObject* fromJSON (
+            CScene* scene,
             json data,
-            bool visible,
+            CUserSettingBoolean* visible,
             uint32_t id,
             std::string name,
-            const glm::vec3& origin,
-            const glm::vec3& scale,
+            CUserSettingVector3* origin,
+            CUserSettingVector3* scale,
             const glm::vec3& angles
         );
 
@@ -27,11 +30,12 @@ namespace WallpaperEngine::Core::Objects
 
     protected:
         CSound (
-            bool visible,
+            CScene* scene,
+            CUserSettingBoolean* visible,
             uint32_t id,
             std::string name,
-            const glm::vec3& origin,
-            const glm::vec3& scale,
+            CUserSettingVector3* origin,
+            CUserSettingVector3* scale,
             const glm::vec3& angles
         );
 

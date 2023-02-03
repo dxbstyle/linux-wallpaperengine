@@ -1,3 +1,5 @@
+#include "common.h"
+
 #include "WallpaperEngine/Core/Objects/CImage.h"
 #include "WallpaperEngine/Core/Objects/CSound.h"
 
@@ -6,57 +8,207 @@
 
 #include "CScene.h"
 
+extern float g_Time;
+extern float g_TimeLast;
+
 using namespace WallpaperEngine;
 using namespace WallpaperEngine::Render;
 
-CScene::CScene (Core::CScene* scene, CContainer* container, CContext* context) :
-    CWallpaper (scene, Type, container, context)
+CScene::CScene (Core::CScene* scene, CRenderContext* context) :
+    CWallpaper (scene, Type, context)
 {
     // setup the scene camera
     this->m_camera = new CCamera (this, scene->getCamera ());
+
+    // detect size if the orthogonal project is auto
+    if (scene->getOrthogonalProjection ()->isAuto () == true)
+    {
+        // calculate the size of the projection based on the size of everything
+        for (const auto& cur : scene->getObjects ())
+        {
+            if (cur.second->is<Core::Objects::CImage> () == false)
+                continue;
+
+            glm::vec2 size = cur.second->as <Core::Objects::CImage> ()->getSize ();
+
+            scene->getOrthogonalProjection ()->setWidth (size.x);
+            scene->getOrthogonalProjection ()->setHeight (size.y);
+        }
+    }
+
+    this->m_parallaxDisplacement = {0, 0};
+
     this->m_camera->setOrthogonalProjection (
         scene->getOrthogonalProjection ()->getWidth (),
         scene->getOrthogonalProjection ()->getHeight ()
     );
+
+    // set clear color
+    glm::vec3 clearColor = this->getScene ()->getClearColor ();
+
+    glClearColor (clearColor.r, clearColor.g, clearColor.b, 1.0f);
+
     // setup framebuffers
     this->setupFramebuffers ();
 
-    auto cur = scene->getObjects ().begin ();
-    auto end = scene->getObjects ().end ();
+    // create all objects based off their dependencies
+    for (const auto& cur : scene->getObjects ())
+        this->createObject (cur.second);
 
-    for (; cur != end; cur ++)
+    // copy over objects by render order
+    for (const auto& cur : scene->getObjectsByRenderOrder ())
     {
-        CObject* object = nullptr;
+        auto obj = this->m_objects.find (cur->getId ());
 
-        if ((*cur)->is<Core::Objects::CImage>() == true)
-        {
-            object = new Objects::CImage (this, (*cur)->as<Core::Objects::CImage>());
-        }
-        else if ((*cur)->is<Core::Objects::CSound>() == true)
-        {
-            object = new Objects::CSound (this, (*cur)->as<Core::Objects::CSound>());
-        }
+        // ignores not created objects like particle systems
+        if (obj == this->m_objects.end ())
+            continue;
 
-        if (object != nullptr)
-            this->m_objects.emplace_back (object);
+        this->m_objectsByRenderOrder.emplace_back ((*obj).second);
     }
 
-    auto objectsCur = this->m_objects.begin ();
-    auto objectsEnd = this->m_objects.end ();
+    uint32_t sceneWidth = scene->getOrthogonalProjection ()->getWidth ();
+    uint32_t sceneHeight = scene->getOrthogonalProjection ()->getHeight ();
 
-    for (; objectsCur != objectsEnd; objectsCur ++)
+    // create extra framebuffers for the bloom effect
+    this->_rt_4FrameBuffer = this->createFBO (
+        "_rt_4FrameBuffer",
+        ITexture::TextureFormat::ARGB8888,
+        ITexture::TextureFlags::NoInterpolation,
+        1.0,
+        sceneWidth / 4, sceneHeight / 4,
+        sceneWidth / 4, sceneHeight / 4
+    );
+    this->_rt_8FrameBuffer = this->createFBO (
+        "_rt_8FrameBuffer",
+        ITexture::TextureFormat::ARGB8888,
+        ITexture::TextureFlags::NoInterpolation,
+        1.0,
+        sceneWidth / 8, sceneHeight / 8,
+        sceneWidth / 8, sceneHeight / 8
+    );
+    this->_rt_Bloom = this->createFBO (
+        "_rt_Bloom",
+        ITexture::TextureFormat::ARGB8888,
+        ITexture::TextureFlags::NoInterpolation,
+        1.0,
+        sceneWidth / 8, sceneHeight / 8,
+        sceneWidth / 8, sceneHeight / 8
+    );
+
+    //
+    // Had to get a little creative with the effects to achieve the same bloom effect without any custom code
+    // this custom image loads some effect files from the virtual container to achieve the same bloom effect
+    // this approach requires of two extra draw calls due to the way the effect works in official WPE
+    // (it renders directly to the screen, whereas here we never do that from a scene)
+    //
+
+    std::string imagejson =
+        "{"
+        "\t\"image\": \"models/wpenginelinux.json\","
+        "\t\"name\": \"bloomimagewpenginelinux\","
+        "\t\"visible\": true,"
+        "\t\"scale\": \"1.0 1.0 1.0\","
+        "\t\"angles\": \"0.0 0.0 0.0\","
+        "\t\"origin\": \"" + std::to_string (sceneWidth / 2) + " " + std::to_string (sceneHeight / 2) + " 0.0\","
+        "\t\"id\": " + std::to_string (0xFFFFFFFF) + ","
+        "\t\"effects\":"
+        "\t["
+        "\t\t{"
+        "\t\t\t\"file\": \"effects/wpenginelinux/bloomeffect.json\","
+        "\t\t\t\"id\": 15242000,"
+        "\t\t\t\"name\": \"\","
+        "\t\t\t\"passes\":"
+        "\t\t\t["
+        "\t\t\t\t{"
+        "\t\t\t\t\t\"constantshadervalues\":"
+        "\t\t\t\t\t{"
+        "\t\t\t\t\t\t\"bloomstrength\": " + std::to_string (this->getScene ()->getBloomStrength ()) + ","
+        "\t\t\t\t\t\t\"bloomthreshold\": " + std::to_string (this->getScene ()->getBloomThreshold ()) +
+        "\t\t\t\t\t}"
+        "\t\t\t\t},"
+        "\t\t\t\t{"
+        "\t\t\t\t\t\"constantshadervalues\":"
+        "\t\t\t\t\t{"
+        "\t\t\t\t\t\t\"bloomstrength\": " + std::to_string (this->getScene ()->getBloomStrength ()) + ","
+        "\t\t\t\t\t\t\"bloomthreshold\": " + std::to_string (this->getScene ()->getBloomThreshold ()) +
+        "\t\t\t\t\t}"
+        "\t\t\t\t},"
+        "\t\t\t\t{"
+        "\t\t\t\t\t\"constantshadervalues\":"
+        "\t\t\t\t\t{"
+        "\t\t\t\t\t\t\"bloomstrength\": " + std::to_string (this->getScene ()->getBloomStrength ()) + ","
+        "\t\t\t\t\t\t\"bloomthreshold\": " + std::to_string (this->getScene ()->getBloomThreshold ()) +
+        "\t\t\t\t\t}"
+        "\t\t\t\t}"
+        "\t\t\t]"
+        "\t\t}"
+        "\t],"
+        "\t\"size\": \"" + std::to_string (sceneWidth) + " " + std::to_string (sceneHeight) + "\""
+        "}";
+    auto json = nlohmann::json::parse (imagejson);
+
+    // create image for bloom passes
+    if (this->getScene ()->isBloom () == true)
     {
+        this->m_bloomObject = this->createObject (
+            WallpaperEngine::Core::CObject::fromJSON (
+                json, this->getScene (), this->getContainer ()
+            )
+        );
+
+        this->m_objectsByRenderOrder.push_back (this->m_bloomObject);
+    }
+}
+
+Render::CObject* CScene::createObject (Core::CObject* object)
+{
+    Render::CObject* renderObject = nullptr;
+
+    // ensure the item is not loaded already
+    auto current = this->m_objects.find (object->getId ());
+
+    if (current != this->m_objects.end ())
+        return (*current).second;
+
+    // check dependencies too!
+    for (const auto& cur : object->getDependencies ())
+    {
+        // self-dependency is a possibility...
+        if (cur == object->getId ())
+            continue;
+
+        auto dep = this->getScene ()->getObjects ().find (cur);
+
+        if (dep != this->getScene ()->getObjects ().end ())
+            this->createObject ((*dep).second);
+    }
+
+    if (object->is<Core::Objects::CImage>() == true)
+    {
+        Objects::CImage* image = new Objects::CImage (this, object->as<Core::Objects::CImage>());
+
         try
         {
-            if ((*objectsCur)->is <Objects::CImage> () == true)
-                (*objectsCur)->as <Objects::CImage> ()->setup ();
+            image->setup ();
         }
         catch (std::runtime_error ex)
         {
-            std::cerr << "Cannot setup image resource: " << std::endl;
-            std::cerr << ex.what () << std::endl;
+            // this error message is already printed, so just show extra info about it
+            sLog.error ("Cannot setup image ", image->getImage ()->getName ());
         }
+
+        renderObject = image;
     }
+    else if (object->is<Core::Objects::CSound>() == true)
+    {
+        renderObject = new Objects::CSound (this, object->as<Core::Objects::CSound>());
+    }
+
+    if (renderObject != nullptr)
+        this->m_objects.insert (std::make_pair (renderObject->getId (), renderObject));
+
+    return renderObject;
 }
 
 CCamera* CScene::getCamera () const
@@ -66,38 +218,40 @@ CCamera* CScene::getCamera () const
 
 void CScene::renderFrame (glm::ivec4 viewport)
 {
-    auto projection = this->getScene ()->getOrthogonalProjection ();
-    auto cur = this->m_objects.begin ();
-    auto end = this->m_objects.end ();
-
     // ensure the virtual mouse position is up to date
     this->updateMouse (viewport);
 
-    // clear screen
-    FloatColor clearColor = this->getScene ()->getClearColor ();
+    // update the parallax position if required
+    if (this->getScene ()->isCameraParallax () == true)
+    {
+        float influence = this->getScene ()->getCameraParallaxMouseInfluence ();
+        float amount = this->getScene ()->getCameraParallaxAmount ();
+        float delay = glm::min ((float) this->getScene ()->getCameraParallaxDelay (), g_Time - g_TimeLast);
 
-    glClearColor (clearColor.r, clearColor.g, clearColor.b, 0.0f);
+        this->m_parallaxDisplacement = glm::mix (this->m_parallaxDisplacement, (this->m_mousePosition * amount) * influence, delay);
+    }
 
     // use the scene's framebuffer by default
     glBindFramebuffer (GL_FRAMEBUFFER, this->getWallpaperFramebuffer());
-    // ensure we render over the whole screen
-    glViewport (0, 0, projection->getWidth (), projection->getHeight ());
+    // ensure we render over the whole framebuffer
+    glViewport (0, 0, this->m_sceneFBO->getRealWidth (), this->m_sceneFBO->getRealHeight ());
 
-    for (; cur != end; cur ++)
-        (*cur)->render ();
+    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // ensure we render over the whole screen
-    glViewport (0, 0, projection->getWidth (), projection->getHeight ());
+    for (const auto& cur : this->m_objectsByRenderOrder)
+        cur->render ();
 }
 
 void CScene::updateMouse (glm::ivec4 viewport)
 {
-    // projection also affects the mouse position
-    auto projection = this->getScene ()->getOrthogonalProjection ();
     // update virtual mouse position first
     CMouseInput* mouse = this->getContext ()->getMouse ();
     // TODO: PROPERLY TRANSLATE THESE TO WHAT'S VISIBLE ON SCREEN (FOR BACKGROUNDS THAT DO NOT EXACTLY FIT ON SCREEN)
 
+    // rollover the position to the last
+    this->m_mousePositionLast = this->m_mousePosition;
+
+    // calculate the current position of the mouse
     this->m_mousePosition.x = glm::clamp ((mouse->position.x - viewport.x) / viewport.z, 0.0, 1.0);
     this->m_mousePosition.y = glm::clamp ((mouse->position.y - viewport.y) / viewport.w, 0.0, 1.0);
 
@@ -112,6 +266,16 @@ Core::CScene* CScene::getScene ()
 glm::vec2* CScene::getMousePosition ()
 {
     return &this->m_mousePosition;
+}
+
+glm::vec2* CScene::getMousePositionLast ()
+{
+    return &this->m_mousePositionLast;
+}
+
+glm::vec2* CScene::getParallaxDisplacement ()
+{
+    return &this->m_parallaxDisplacement;
 }
 
 const std::string CScene::Type = "scene";

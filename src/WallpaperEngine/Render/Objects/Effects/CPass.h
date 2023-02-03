@@ -21,7 +21,17 @@ namespace WallpaperEngine::Render::Objects::Effects
     public:
         CPass (CMaterial* material, Core::Objects::Images::Materials::CPass* pass);
 
-        void render (CFBO* drawTo, ITexture* input, GLuint position, GLuint texcoord, glm::mat4 projection);
+        void render ();
+
+        void setDestination (const CFBO* drawTo);
+        void setInput (const ITexture* input);
+        void setTexCoord (GLuint texcoord);
+        void setPosition (GLuint position);
+        void setModelViewProjectionMatrix (const glm::mat4* projection);
+        void setModelMatrix (glm::mat4 model);
+
+        const CMaterial* getMaterial () const;
+        Core::Objects::Images::Materials::CPass* getPass ();
 
     private:
         enum UniformType
@@ -45,6 +55,18 @@ namespace WallpaperEngine::Render::Objects::Effects
             std::string name;
             UniformType type;
             const void* value;
+        };
+
+        class ReferenceUniformEntry
+        {
+        public:
+            ReferenceUniformEntry (GLint id, std::string name, UniformType type, const void** value) :
+                id (id), name (std::move (name)), type (type), value (value) { }
+
+            GLint id;
+            std::string name;
+            UniformType type;
+            const void** value;
         };
 
         class AttribEntry
@@ -81,21 +103,40 @@ namespace WallpaperEngine::Render::Objects::Effects
         void addUniform (const std::string& name, const glm::vec3* value);
         void addUniform (const std::string& name, const glm::vec4* value);
         void addUniform (const std::string& name, const glm::mat4* value);
+        void addUniform (const std::string& name, const int** value);
+        void addUniform (const std::string& name, const double** value);
+        void addUniform (const std::string& name, const float** value);
+        void addUniform (const std::string& name, const glm::vec2** value);
+        void addUniform (const std::string& name, const glm::vec3** value);
+        void addUniform (const std::string& name, const glm::vec4** value);
+        void addUniform (const std::string& name, const glm::mat4** value);
         template <typename T> void addUniform (const std::string& name, UniformType type, T value);
         template <typename T> void addUniform (const std::string& name, UniformType type, T* value);
+        template <typename T> void addUniform (const std::string& name, UniformType type, T** value);
 
-        ITexture* resolveTexture (ITexture* expected, int index, ITexture* previous = nullptr);
+        const ITexture* resolveTexture (const ITexture* expected, int index, const ITexture* previous = nullptr);
 
         CMaterial* m_material;
         Core::Objects::Images::Materials::CPass* m_pass;
-        std::vector<ITexture*> m_textures;
-        std::map<int, CFBO*> m_fbos;
+        std::vector<const ITexture*> m_textures;
+        std::map<int, const CFBO*> m_fbos;
+        std::map <std::string, bool> m_foundCombos;
         std::vector<AttribEntry*> m_attribs;
         std::map<std::string, UniformEntry*> m_uniforms;
-        glm::mat4 m_modelViewProjectionMatrix;
+        std::map<std::string, ReferenceUniformEntry*> m_referenceUniforms;
+        const glm::mat4* m_modelViewProjectionMatrix;
+        glm::mat4 m_modelMatrix;
+
+        /**
+         * Contains the final map of textures to be used
+         */
+        std::map <int, const ITexture*> m_finalTextures;
 
         Render::Shaders::Compiler* m_fragShader;
         Render::Shaders::Compiler* m_vertShader;
+
+        const CFBO* m_drawTo;
+        const ITexture* m_input;
 
         GLuint m_programID;
 

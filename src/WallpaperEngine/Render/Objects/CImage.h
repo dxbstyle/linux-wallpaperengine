@@ -3,6 +3,7 @@
 #include "WallpaperEngine/Core/Objects/CImage.h"
 
 #include "WallpaperEngine/Render/Objects/Effects/CMaterial.h"
+#include "WallpaperEngine/Render/Objects/Effects/CPass.h"
 #include "WallpaperEngine/Render/Objects/CEffect.h"
 #include "WallpaperEngine/Render/CObject.h"
 #include "WallpaperEngine/Render/CScene.h"
@@ -19,6 +20,7 @@ using namespace WallpaperEngine::Assets;
 namespace WallpaperEngine::Render::Objects::Effects
 {
     class CMaterial;
+    class CPass;
 }
 
 namespace WallpaperEngine::Render::Objects
@@ -38,13 +40,12 @@ namespace WallpaperEngine::Render::Objects
         const std::vector<CEffect*>& getEffects () const;
         const glm::vec2 getSize() const;
 
-        const GLfloat* getVertex () const;
-        const GLuint* getSceneSpacePosition () const;
-        const GLuint* getCopySpacePosition () const;
-        const GLuint* getPassSpacePosition () const;
-        const GLuint* getTexCoordCopy () const;
-        const GLuint* getTexCoordPass () const;
-        ITexture* getTexture () const;
+        const GLuint getSceneSpacePosition () const;
+        const GLuint getCopySpacePosition () const;
+        const GLuint getPassSpacePosition () const;
+        const GLuint getTexCoordCopy () const;
+        const GLuint getTexCoordPass () const;
+        const ITexture* getTexture () const;
         const double getAnimationTime () const;
 
         /**
@@ -53,15 +54,16 @@ namespace WallpaperEngine::Render::Objects
          * @param drawTo The framebuffer to use
          * @param asInput The last texture used as output (if needed)
          */
-        void pinpongFramebuffer (CFBO** drawTo, ITexture** asInput);
+        void pinpongFramebuffer (const CFBO** drawTo, const ITexture** asInput);
 
     protected:
         static const std::string Type;
 
-        void simpleRender ();
-        void complexRender ();
+        void setupPasses ();
+
+        void updateScreenSpacePosition ();
     private:
-        ITexture* m_texture;
+        const ITexture* m_texture;
         GLuint m_sceneSpacePosition;
         GLuint m_copySpacePosition;
         GLuint m_passSpacePosition;
@@ -70,6 +72,7 @@ namespace WallpaperEngine::Render::Objects
 
         glm::mat4 m_modelViewProjectionScreen;
         glm::mat4 m_modelViewProjectionPass;
+        glm::mat4 m_modelViewProjectionCopy;
 
         CFBO* m_mainFBO;
         CFBO* m_subFBO;
@@ -80,7 +83,10 @@ namespace WallpaperEngine::Render::Objects
 
         std::vector<CEffect*> m_effects;
         Effects::CMaterial* m_material;
-        Effects::CMaterial* m_copyMaterial;
+        Effects::CMaterial* m_colorBlendMaterial;
+        std::vector <Effects::CPass*> m_passes;
+
+        glm::vec4 m_pos;
 
         double m_animationTime;
 

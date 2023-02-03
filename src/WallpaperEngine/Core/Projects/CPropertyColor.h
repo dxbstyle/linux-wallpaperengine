@@ -7,20 +7,21 @@
 namespace WallpaperEngine::Core::Projects
 {
     using json = nlohmann::json;
-    using namespace WallpaperEngine::Core::Types;
 
     class CPropertyColor : public CProperty
     {
     public:
         static CPropertyColor* fromJSON (json data, const std::string& name);
 
-        const IntegerColor& getValue () const;
+        const glm::vec3& getValue () const;
+        std::string dump () const override;
+        void update (const std::string& value) override;
 
         static const std::string Type;
 
     private:
-        CPropertyColor (IntegerColor color, const std::string& name, const std::string& text);
+        CPropertyColor (glm::vec3 color, const std::string& name, const std::string& text);
 
-        IntegerColor m_color;
+        glm::vec3 m_color;
     };
 };

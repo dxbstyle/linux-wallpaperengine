@@ -1,3 +1,4 @@
+#include "common.h"
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -12,6 +13,7 @@
 #include <WallpaperEngine/Core/Objects/Effects/Constants/CShaderConstantInteger.h>
 #include <WallpaperEngine/Core/Objects/Effects/Constants/CShaderConstantFloat.h>
 
+#include "WallpaperEngine/Assets/CAssetLoadException.h"
 #include "WallpaperEngine/Render/Shaders/Variables/CShaderVariable.h"
 #include "WallpaperEngine/Render/Shaders/Variables/CShaderVariableFloat.h"
 #include "WallpaperEngine/Render/Shaders/Variables/CShaderVariableInteger.h"
@@ -25,20 +27,25 @@ using namespace WallpaperEngine::Assets;
 namespace WallpaperEngine::Render::Shaders
 {
     Compiler::Compiler (
-            CContainer* container,
+            const CContainer* container,
             std::string filename,
             Type type,
-            std::map<std::string, int>* combos,
+            std::map <std::string, int>* combos,
+            std::map <std::string, bool>* foundCombos,
+            const std::vector <std::string>& textures,
             const std::map<std::string, CShaderConstant*>& constants,
             bool recursive) :
         m_combos (combos),
+        m_foundCombos (foundCombos),
+        m_passTextures (textures),
         m_recursive (recursive),
         m_type (type),
         m_file (std::move(filename)),
         m_error (""),
         m_errorInfo (""),
         m_constants (constants),
-        m_container (container)
+        m_container (container),
+        m_baseCombos ()
     {
         if (type == Type_Vertex)
             this->m_content = this->m_container->readVertexShader (this->m_file);
@@ -46,6 +53,10 @@ namespace WallpaperEngine::Render::Shaders
             this->m_content = this->m_container->readFragmentShader (this->m_file);
         else if (type == Type_Include)
             this->m_content = this->m_container->readIncludeShader (this->m_file);
+
+        // clone the combos into the baseCombos to keep track of values that must be embedded no matter what
+        for (const auto& cur : *this->m_combos)
+            this->m_baseCombos.insert (std::make_pair (cur.first, cur.second));
     }
 
     bool Compiler::peekString(std::string str, std::string::const_iterator& it)
@@ -220,7 +231,7 @@ namespace WallpaperEngine::Render::Shaders
     {
         // now compile the new shader
         // do not include the default header (as it's already included in the parent)
-        Compiler loader (this->m_container, std::move (filename), Type_Include, this->m_combos, this->m_constants, true);
+        Compiler loader (this->m_container, std::move (filename), Type_Include, this->m_combos, this->m_foundCombos, this->m_passTextures, this->m_constants, true);
 
         loader.precompile ();
 
@@ -235,7 +246,7 @@ namespace WallpaperEngine::Render::Shaders
     void Compiler::precompile()
     {
         // TODO: SEPARATE THIS IN TWO SO THE COMBOS ARE DETECTED FIRST AND WE DO NOT REQUIRE DOUBLE COMPILATION OF THE SHADER'S SOURCE
-    #define BREAK_IF_ERROR if (this->m_error == true) { throw std::runtime_error ("ERROR PRE-COMPILING SHADER" + this->m_errorInfo); }
+    #define BREAK_IF_ERROR if (this->m_error == true) { sLog.exception ("ERROR PRE-COMPILING SHADER.", this->m_errorInfo); }
         // parse the shader and find #includes and such things and translate them to the correct name
         // also remove any #version definition to prevent errors
         std::string::const_iterator it = this->m_content.begin ();
@@ -352,6 +363,7 @@ namespace WallpaperEngine::Render::Shaders
                     // types not found, try names
                     if (this->m_error == false)
                     {
+                        this->ignoreSpaces (it);
                         this->m_compiledContent += type;
                     }
                     else
@@ -431,9 +443,10 @@ namespace WallpaperEngine::Render::Shaders
                 // check for types first
                 std::string type = this->extractType (it);
 
-                // types not found, try names
+                // type found
                 if (this->m_error == false)
                 {
+                    this->ignoreSpaces (it);
                     // check for main, and take it into account, this also helps adding the includes
                     std::string name = this->extractName (it);
 
@@ -478,13 +491,16 @@ namespace WallpaperEngine::Render::Shaders
         if (this->m_recursive == false)
         {
             // add the opengl compatibility at the top
-            finalCode =   "#version 130\n"
+            finalCode =   "#version 150\n"
+                          "// ======================================================\n"
+                          "// Processed shader " + this->m_file + "\n"
+                          "// ======================================================\n"
                           "#define highp\n"
                           "#define mediump\n"
                           "#define lowp\n"
                           "#define mul(x, y) ((y) * (x))\n"
                           "#define max(x, y) max (y, x)\n"
-                          "#define fmod(x, y) (x-y*trunc(x/y))\n"
+                          "#define fmod(x, y) ((x)-(y)*trunc((x)/(y)))\n"
                           "#define lerp mix\n"
                           "#define frac fract\n"
                           "#define CAST2(x) (vec2(x))\n"
@@ -501,27 +517,41 @@ namespace WallpaperEngine::Render::Shaders
                           "#define float1 float\n"
                           "#define float2 vec2\n"
                           "#define float3 vec3\n"
-                          "#define float4 vec4\n";
+                          "#define float4 vec4\n\n";
+
+            finalCode +=  "// ======================================================\n"
+                          "// Shader combo parameter definitions\n"
+                          "// ======================================================\n";
 
             // add combo values
-            auto cur = this->m_combos->begin ();
-            auto end = this->m_combos->end ();
-
-            for (; cur != end; cur ++)
+            for (const auto& cur : *this->m_foundCombos)
             {
-                finalCode += "#define " + (*cur).first + " " + std::to_string ((*cur).second) + "\n";
+                // find the right value for the combo in the combos map
+                auto combo = this->m_combos->find (cur.first);
+
+                if (combo == this->m_combos->end ())
+                    continue;
+
+                finalCode += "#define " + cur.first + " " + std::to_string ((*combo).second) + "\n";
+            }
+            // add base combos that come from the pass change that MUST be added
+            for (const auto& cur : this->m_baseCombos)
+            {
+                auto alreadyFound = this->m_foundCombos->find (cur.first);
+
+                if (alreadyFound != this->m_foundCombos->end ())
+                    continue;
+
+                finalCode += "#define " + cur.first + " " + std::to_string (cur.second) + "\n";
             }
         }
 
         finalCode += this->m_compiledContent;
 
-        if (DEBUG && this->m_recursive == false)
+        if (this->m_recursive == false)
         {
-            if (this->m_type == Type_Vertex)
-                std::cout << "======================== COMPILED VERTEX SHADER " << this->m_file.c_str () << " ========================" << std::endl;
-            else
-                std::cout << "======================== COMPILED FRAGMENT SHADER " << this->m_file.c_str () << " ========================" << std::endl;
-            std::cout << finalCode << std::endl;
+            sLog.debug("======================== COMPILED ", (this->m_type == Type_Vertex ? "VERTEX" : "FRAGMENT"), " SHADER ", this->m_file, " ========================");
+            sLog.debug(finalCode);
         }
 
         // store the final final code here
@@ -541,6 +571,9 @@ namespace WallpaperEngine::Render::Shaders
         // check the combos
         std::map<std::string, int>::const_iterator entry = this->m_combos->find ((*combo).get <std::string> ());
 
+        // add the combo to the found list
+        this->m_foundCombos->insert (std::make_pair <std::string, int> (*combo, true));
+
         // if the combo was not found in the predefined values this means that the default value in the JSON data can be used
         // so only define the ones that are not already defined
         if (entry == this->m_combos->end ())
@@ -553,7 +586,7 @@ namespace WallpaperEngine::Render::Shaders
             }
             else if ((*defvalue).is_number_float ())
             {
-                throw std::runtime_error ("float combos not supported");
+                sLog.exception ("float combos are not supported in shader ", this->m_file, ". ", *combo);
             }
             else if ((*defvalue).is_number_integer ())
             {
@@ -561,11 +594,11 @@ namespace WallpaperEngine::Render::Shaders
             }
             else if ((*defvalue).is_string ())
             {
-                throw std::runtime_error ("string combos not supported");
+                sLog.exception ("string combos are not supported in shader ", this->m_file, ". ", *combo);
             }
             else
             {
-                throw std::runtime_error ("cannot parse combo information, unknown type");
+                sLog.exception ("cannot parse combo information ", *combo, ". unknown type for ", defvalue->dump ());
             }
         }
     }
@@ -587,7 +620,7 @@ namespace WallpaperEngine::Render::Shaders
         if (constant == this->m_constants.end () && defvalue == data.end ())
         {
             if (type != "sampler2D")
-                throw std::runtime_error ("cannot parse parameter data");
+                sLog.exception ("Cannot parse parameter data for ", name, " in shader ", this->m_file);
         }
 
         Variables::CShaderVariable* parameter = nullptr;
@@ -647,39 +680,28 @@ namespace WallpaperEngine::Render::Shaders
             // if needed
             auto combo = data.find ("combo");
             auto textureName = data.find ("default");
+            // extract the texture number from the name
+            char value = name.at (std::string("g_Texture").length ());
+            // now convert it to integer
+            int index = value - '0';
 
             if (combo != data.end ())
             {
-                // add the new combo to the list
-                this->m_combos->insert (std::make_pair <std::string, int> (*combo, 1));
-
-                if (textureName != data.end ())
+                // if the texture exists (and is not null), add to the combo
+                if (this->m_passTextures.size () > index && (this->m_passTextures.at (index) != "" || textureName != data.end ()))
                 {
-                    // also ensure that the textureName is loaded and we know about it
-                    ITexture* texture = this->m_container->readTexture ((*textureName).get <std::string> ());
-                    // extract the texture number from the name
-                    char value = name.at (std::string("g_Texture").length ());
-                    // now convert it to integer
-                    int index = value - '0';
+                    // add the new combo to the list
+                    this->m_combos->insert (std::make_pair <std::string, int> (*combo, 1));
 
-                    this->m_textures.insert (
-                            std::make_pair (index, texture)
-                    );
+                    // textures linked to combos need to be tracked too
+                    if (this->m_foundCombos->find (*combo) == this->m_foundCombos->end ())
+                        this->m_foundCombos->insert (std::make_pair <std::string, bool> (*combo, true));
                 }
-            }
-            else
-            {
-                // material name is not resolved on compile time, but passes will do it after
 
-                // extract the texture number from the name
-                char value = name.at (std::string("g_Texture").length ());
-                // now convert it to integer
-                int index = value - '0';
-
-                this->m_textures.insert (
-                    std::make_pair (index, nullptr)
-                );
             }
+
+            if (textureName != data.end ())
+                this->m_textures.insert (std::make_pair (index, *textureName));
 
             // samplers are not saved, we can ignore them for now
             return;
@@ -702,16 +724,9 @@ namespace WallpaperEngine::Render::Shaders
 
     Variables::CShaderVariable* Compiler::findParameter (const std::string& identifier)
     {
-        auto cur = this->m_parameters.begin ();
-        auto end = this->m_parameters.end ();
-
-        for (; cur != end; cur ++)
-        {
-            if ((*cur)->getIdentifierName () == identifier)
-            {
-                return (*cur);
-            }
-        }
+        for (const auto& cur : this->m_parameters)
+            if (cur->getIdentifierName () == identifier)
+                return cur;
 
         return nullptr;
     }
@@ -726,7 +741,7 @@ namespace WallpaperEngine::Render::Shaders
         return this->m_combos;
     }
 
-    const std::map <int, ITexture*>& Compiler::getTextures () const
+    const std::map <int, std::string>& Compiler::getTextures () const
     {
         return this->m_textures;
     }

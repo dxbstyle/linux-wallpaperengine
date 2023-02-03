@@ -15,13 +15,13 @@ CMaterial::CMaterial (const std::string& name) :
 {
 }
 
-CMaterial* CMaterial::fromFile (const std::string& filename, CContainer* container)
+CMaterial* CMaterial::fromFile (const std::string& filename, const CContainer* container)
 {
     return fromJSON (
         filename, json::parse (WallpaperEngine::FileSystem::loadFullFile (filename, container))
     );
 }
-CMaterial* CMaterial::fromFile (const std::string& filename, const std::string& target, CContainer* container)
+CMaterial* CMaterial::fromFile (const std::string& filename, const std::string& target, const CContainer* container)
 {
     return fromJSON (
         filename, json::parse (WallpaperEngine::FileSystem::loadFullFile (filename, container)), target
@@ -43,15 +43,8 @@ CMaterial* CMaterial::fromJSON (const std::string& name, json data)
 
     CMaterial* material = new CMaterial (name);
 
-    auto cur = (*passes_it).begin ();
-    auto end = (*passes_it).end ();
-
-    for (; cur != end; cur ++)
-    {
-        material->insertPass (
-            Materials::CPass::fromJSON (*cur)
-        );
-    }
+    for (const auto& cur : (*passes_it))
+        material->insertPass (Materials::CPass::fromJSON (cur));
 
     return material;
 }

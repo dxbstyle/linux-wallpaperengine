@@ -12,6 +12,8 @@ namespace WallpaperEngine::Core::Projects
         static CPropertyBoolean* fromJSON (json data, const std::string& name);
 
         bool getValue ();
+        std::string dump () const override;
+        void update (const std::string& value) override;
 
         static const std::string Type;
 

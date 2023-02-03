@@ -5,7 +5,6 @@
 
 using namespace WallpaperEngine;
 using namespace WallpaperEngine::Render;
-using namespace WallpaperEngine::Core::Types;
 
 CCamera::CCamera (CScene* scene, const Core::Scenes::CCamera* camera) :
     m_camera (camera),
@@ -56,7 +55,7 @@ void CCamera::setOrthogonalProjection (float width, float height)
 {
     // TODO: GET THE ZNEAR AND ZFAR FROM THE BACKGROUND (IF AVAILABLE)
     // get the orthogonal projection (the float is there to ensure the values are casted to float, so maths do work)
-    this->m_projection = glm::ortho <float> (-width / 2, width / 2, -height / 2, height / 2, 0, 1000);
+    this->m_projection = glm::ortho <float> (-width / 2.0, width / 2.0, -height / 2.0, height / 2.0, 0, 1000);
     this->m_projection = glm::translate (this->m_projection, this->getEye ());
     // update the orthogonal flag
     this->m_isOrthogonal = true;

@@ -1,36 +1,39 @@
+#include "common.h"
 #include "WallpaperEngine/Core/CObject.h"
 #include "CSound.h"
 
 using namespace WallpaperEngine::Core::Objects;
 
 CSound::CSound (
-        bool visible,
+        CScene* scene,
+        CUserSettingBoolean* visible,
         uint32_t id,
         std::string name,
-        const glm::vec3& origin,
-        const glm::vec3& scale,
+        CUserSettingVector3* origin,
+        CUserSettingVector3* scale,
         const glm::vec3& angles) :
-        CObject (visible, id, std::move(name), Type, origin, scale, angles)
+        CObject (scene, visible, id, std::move(name), Type, origin, scale, angles)
 {
 }
 
 WallpaperEngine::Core::CObject* CSound::fromJSON (
+        CScene* scene,
         json data,
-        bool visible,
+        CUserSettingBoolean* visible,
         uint32_t id,
         std::string name,
-        const glm::vec3& origin,
-        const glm::vec3& scale,
+        CUserSettingVector3* origin,
+        CUserSettingVector3* scale,
         const glm::vec3& angles)
 {
+    // TODO: PARSE AUDIO VOLUME
     auto sound_it = jsonFindRequired (data, "sound", "Sound information not present");
 
     if ((*sound_it).is_array () == false)
-    {
-        throw std::runtime_error ("Expected sound list");
-    }
+        sLog.exception ("Expected sound list on element ", name);
 
     CSound* sound = new CSound (
+        scene,
         visible,
         id,
         name,
@@ -39,13 +42,8 @@ WallpaperEngine::Core::CObject* CSound::fromJSON (
         angles
     );
 
-    auto cur = (*sound_it).begin ();
-    auto end = (*sound_it).end ();
-
-    for (; cur != end; cur ++)
-    {
-        sound->insertSound (*cur);
-    }
+    for (const auto& cur : (*sound_it))
+        sound->insertSound (cur);
 
     return sound;
 }

@@ -17,12 +17,14 @@ namespace WallpaperEngine::Core::Objects
 
     public:
         static CParticle* fromFile (
+                CScene* scene,
                 const std::string& filename,
-                CContainer* container,
+                const CContainer* container,
+                CUserSettingBoolean* visible,
                 uint32_t id,
                 std::string name,
-                const glm::vec3& origin,
-                const glm::vec3& scale
+                CUserSettingVector3* origin,
+                CUserSettingVector3* scale
         );
 
         const std::vector<Particles::CEmitter*>& getEmitters () const;
@@ -31,12 +33,14 @@ namespace WallpaperEngine::Core::Objects
 
     protected:
         CParticle (
+            CScene* scene,
             uint32_t starttime,
             uint32_t maxcount,
+            CUserSettingBoolean* visible,
             uint32_t id,
             std::string name,
-            const glm::vec3& origin,
-            const glm::vec3& scale
+            CUserSettingVector3* origin,
+            CUserSettingVector3* scale
         );
         void insertControlPoint (Particles::CControlPoint* controlpoint);
         void insertEmitter (Particles::CEmitter* emitter);

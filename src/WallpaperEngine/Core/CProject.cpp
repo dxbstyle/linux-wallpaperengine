@@ -1,3 +1,4 @@
+#include "common.h"
 #include <WallpaperEngine/Assets/CContainer.h>
 #include <WallpaperEngine/FileSystem/FileSystem.h>
 
@@ -37,8 +38,10 @@ CProject* CProject::fromFile (const std::string& filename, CContainer* container
     {
         wallpaper = new CVideo (file.c_str ());
     }
+    else if (type == "web")
+        sLog.exception ("Web wallpapers are not supported yet");
     else
-        throw std::runtime_error ("Unsupported wallpaper type");
+        sLog.exception ("Unsupported wallpaper type: ", type);
 
     CProject* project = new CProject (
         title,
@@ -53,14 +56,12 @@ CProject* CProject::fromFile (const std::string& filename, CContainer* container
 
         if (properties != (*general).end ())
         {
-            auto cur = (*properties).begin ();
-            auto end = (*properties).end ();
-
-            for (; cur != end; cur ++)
+            for (const auto& cur : (*properties).items ())
             {
-                project->insertProperty (
-                        Projects::CProperty::fromJSON (*cur, cur.key ())
-                );
+                Projects::CProperty* property = Projects::CProperty::fromJSON (cur.value (), cur.key ());
+
+                if (property != nullptr)
+                    project->insertProperty (property);
             }
         }
     }

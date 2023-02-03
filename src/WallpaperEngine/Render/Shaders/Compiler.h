@@ -51,10 +51,12 @@ namespace WallpaperEngine::Render::Shaders
          * @param recursive Whether the compiler should add base definitions or not
          */
         Compiler (
-            CContainer* container,
+            const CContainer* container,
             std::string filename,
             Type type,
             std::map<std::string, int>* combos,
+            std::map<std::string, bool>* foundCombos,
+            const std::vector <std::string>& textures,
             const std::map<std::string, CShaderConstant*>& constants,
             bool recursive = false
         );
@@ -89,7 +91,7 @@ namespace WallpaperEngine::Render::Shaders
         /**
          * @return The list of textures inferred from the shader's code
          */
-        const std::map <int, ITexture*>& getTextures () const;
+        const std::map <int, std::string>& getTextures () const;
 
     private:
         /**
@@ -231,6 +233,21 @@ namespace WallpaperEngine::Render::Shaders
          * The combos the shader should be generated with
          */
          std::map <std::string, int>* m_combos;
+
+         /**
+          * Combos that come from the pass' chain that should be added
+          */
+         std::map <std::string, int> m_baseCombos;
+
+         /**
+          * The combos the shader code has defined (shared between fragment and vertex)
+          */
+         std::map <std::string, bool>* m_foundCombos;
+
+         /**
+          * The list of textures the pass knows about
+          */
+         const std::vector <std::string> m_passTextures;
          /**
           * The shader constants with values for variables inside the shader
           */
@@ -242,11 +259,11 @@ namespace WallpaperEngine::Render::Shaders
          /**
           * The container to load files from
           */
-         CContainer* m_container;
+         const CContainer* m_container;
          /**
           * List of textures that the shader expects (inferred from sampler2D and it's JSON data)
           */
-         std::map<int, ITexture*> m_textures;
+         std::map<int, std::string> m_textures;
          bool m_includesProcessed = false;
     };
 }

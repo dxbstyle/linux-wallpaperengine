@@ -18,12 +18,14 @@ namespace WallpaperEngine::Render
     class CVideo : public CWallpaper
     {
     public:
-        CVideo (Core::CVideo* video, CContainer* container, CContext* context);
+        CVideo (Core::CVideo* video, CRenderContext* context);
 
         Core::CVideo* getVideo ();
 
         int getWidth ();
         int getHeight ();
+
+        int getFPS ();
 
     protected:
         void renderFrame (glm::ivec4 viewport) override;

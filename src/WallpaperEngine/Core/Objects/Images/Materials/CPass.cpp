@@ -1,3 +1,4 @@
+#include "common.h"
 #include "CPass.h"
 
 using namespace WallpaperEngine::Core::Objects::Effects::Constants;
@@ -14,8 +15,9 @@ CPass::CPass (std::string blending, std::string cullmode, std::string depthtest,
 
 CPass* CPass::fromJSON (json data)
 {
-    auto blending_it = jsonFindRequired (data, "blending", "Material pass must have blending specified");
-    auto cullmode_it = jsonFindRequired (data, "cullmode", "Material pass must have cullmode specified");
+    // TODO: FIGURE OUT DEFAULT BLENDING MODE
+    auto blending = jsonFindDefault <std::string> (data, "blending", "normal");
+    auto cullmode = jsonFindDefault <std::string> (data, "cullmode", "nocull");
     auto depthtest_it = jsonFindRequired (data, "depthtest", "Material pass must have depthtest specified");
     auto depthwrite_it = jsonFindRequired (data, "depthwrite", "Material pass must have depthwrite specified");
     auto shader_it = jsonFindRequired (data, "shader", "Material pass must have shader specified");
@@ -26,14 +28,12 @@ CPass* CPass::fromJSON (json data)
     {
         // TODO: FETCH THIS FROM CImage TO MAKE IT COMPATIBLE WITH OLDER WALLPAPERS
         if ((*textures_it).is_array () == false)
-        {
-            throw std::runtime_error ("Textures for material must be a list");
-        }
+            sLog.exception ("Material's textures must be a list");
     }
 
     CPass* pass = new CPass (
-        *blending_it,
-        *cullmode_it,
+        blending,
+        cullmode,
         *depthtest_it,
         *depthwrite_it,
         *shader_it
@@ -41,39 +41,29 @@ CPass* CPass::fromJSON (json data)
 
     if (textures_it != data.end ())
     {
-        auto cur = (*textures_it).begin ();
-        auto end = (*textures_it).end ();
-
-        for (;cur != end; cur ++)
+        for (const auto& cur : (*textures_it))
         {
-            if ((*cur).is_null () == true)
+            if (cur.is_null () == true)
             {
                 pass->insertTexture ("");
             }
             else
             {
-                pass->insertTexture (*cur);
+                pass->insertTexture (cur);
             }
         }
     }
 
     if (combos_it != data.end ())
     {
-        auto cur = (*combos_it).begin ();
-        auto end = (*combos_it).end ();
-
-        for (; cur != end; cur ++)
+        for (const auto& cur : (*combos_it).items ())
         {
             std::string name = cur.key ();
 
-            if ((*cur).is_number_integer () == true)
-            {
-                pass->insertCombo (name, *cur);
-            }
+            if (cur.value ().is_number_integer () == true)
+                pass->insertCombo (name, cur.value ());
             else
-            {
-                throw std::runtime_error ("unexpected non-integer combo");
-            }
+                sLog.exception ("unexpected non-integer combo on pass");
         }
     }
 
@@ -136,6 +126,11 @@ const std::string& CPass::getDepthTest () const
 const std::string& CPass::getDepthWrite ()const
 {
     return this->m_depthwrite;
+}
+
+void CPass::setBlendingMode (std::string mode)
+{
+    this->m_blending = mode;
 }
 
 void CPass::insertConstant (const std::string& name, CShaderConstant* constant)
